@@ -17,6 +17,7 @@
 package org.gradle.api.tasks
 
 import org.gradle.integtests.fixtures.AbstractIntegrationSpec
+import spock.lang.Issue
 import spock.lang.Unroll
 
 @Unroll
@@ -280,6 +281,43 @@ class MissingTaskDependenciesIntegrationTest extends AbstractIntegrationSpec {
         run("consumer", "producer")
         then:
         executed(":producer", ":consumer")
+    }
+
+    @Issue("https://github.com/gradle/gradle/issues/16061")
+    def "does not detect missing dependencies even for complicated filters"() {
+        buildFile """
+            task prepareBuild {
+                outputs.file("app/foo.txt")
+                doLast {}
+            }
+
+            def sources = fileTree("app") {
+                include("**/*.txt")
+                exclude("**/*generated*")
+                builtBy(prepareBuild)
+            }
+
+            task generateA {
+                inputs.files(sources)
+                outputs.file("app/src/generatedA.txt")
+                doLast {}
+            }
+
+            task generateB {
+                inputs.files(sources)
+                outputs.file("app/src/generatedB.txt")
+                doLast {}
+            }
+
+            task assemble {
+                dependsOn(generateA, generateB)
+            }
+        """
+
+        when:
+        run("assemble")
+        then:
+        executedAndNotSkipped(":assemble")
     }
 
     def "emits a deprecation warning when an input file collection can't be resolved"() {
